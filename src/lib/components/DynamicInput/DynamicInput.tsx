@@ -36,7 +36,6 @@ type TextSegment = {
   id: string;
   value: string;
   type: 'text';
-  order: number;
 };
 type Segment = AttrSegment | TextSegment;
 
@@ -49,41 +48,35 @@ export function DynamicInput<TAttributes extends Record<string, AttributeDef>>(
           {
             id: genSegmentId(),
             type: 'text',
-            order: 0,
             value: props.value.text,
           },
         ]
       : [],
   );
 
-  const [foo, setFoo] = useState('');
-
-  const stuff = value
-    .toSorted((a, b) => a.order - b.order)
-    .map((entry) => {
-      if (entry.type === 'text') {
-        return (
-          <DynamicWidthInput
-            value={entry.value}
-            onValueChange={(newInputValue) =>
-              setValue((prev) =>
-                prev.map((e) =>
-                  e.id === entry.id ? { ...e, value: newInputValue } : e,
-                ),
-              )
-            }
-          />
-        );
-      }
-
-      if (entry.type === 'attribute') {
-        return (
-          <div>
-            {entry.name}: {entry.value}
-          </div>
-        );
-      }
-    });
+  const segments = value.map((entry) => {
+    if (entry.type === 'text') {
+      return (
+        <DynamicWidthInput
+          key={entry.id}
+          value={entry.value}
+          onValueChange={(newInputValue) =>
+            setValue((prev) =>
+              prev.map((e) =>
+                e.id === entry.id ? { ...e, value: newInputValue } : e,
+              ),
+            )
+          }
+        />
+      );
+    } else {
+      return (
+        <div key={entry.id}>
+          {entry.name}: {entry.value}
+        </div>
+      );
+    }
+  });
 
   useEffect(() => {
     // listen to all text inputs
@@ -96,7 +89,7 @@ export function DynamicInput<TAttributes extends Record<string, AttributeDef>>(
         props.className,
       )}
     >
-      {stuff}
+      {segments}
     </div>
   );
 }
@@ -107,32 +100,18 @@ type Props = {
 };
 
 function DynamicWidthInput({ value, onValueChange }: Props) {
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const spanRef = useRef<HTMLSpanElement | null>(null);
-  const [w, setW] = useState<number>();
+  const [width, setWidth] = useState<number>();
 
-  useEffect(() => {
-    const span = document.createElement('span');
-    spanRef.current = span;
-    Object.assign(span.style, {
-      position: 'absolute',
-      visibility: 'hidden',
-      whiteSpace: 'pre',
-      top: '0',
-      left: '-9999px',
-    });
-    document.body.appendChild(span);
-    return () => span.remove();
-  }, []);
-
-  const measure = () => {
+  const recalculateWidth = () => {
     const input = inputRef.current;
     const span = spanRef.current;
     if (!input || !span) return;
 
-    const cs = getComputedStyle(input);
-    span.style.font = cs.font;
-    span.style.letterSpacing = cs.letterSpacing;
+    const inputStyle = getComputedStyle(input);
+    span.style.font = inputStyle.font;
+    span.style.letterSpacing = inputStyle.letterSpacing;
 
     const safe =
       (value || '')
@@ -146,24 +125,40 @@ function DynamicWidthInput({ value, onValueChange }: Props) {
 
     const textW = span.getBoundingClientRect().width;
 
-    const padL = parseFloat(cs.paddingLeft) || 0;
-    const padR = parseFloat(cs.paddingRight) || 0;
-    const bL = parseFloat(cs.borderLeftWidth) || 0;
-    const bR = parseFloat(cs.borderRightWidth) || 0;
+    const paddingLeft = parseFloat(inputStyle.paddingLeft);
+    const paddingRight = parseFloat(inputStyle.paddingRight);
+    const borderLeft = parseFloat(inputStyle.borderLeftWidth);
+    const borderRight = parseFloat(inputStyle.borderRightWidth);
 
-    setW(Math.ceil(textW + padL + padR + bL + bR));
+    setWidth(
+      Math.ceil(textW + paddingLeft + paddingRight + borderLeft + borderRight),
+    );
   };
 
-  useLayoutEffect(measure, []);
-  useLayoutEffect(measure, [value]);
+  /** Update input width to exactly match its content */
+  useLayoutEffect(() => {
+    const span = document.createElement('span');
+    spanRef.current = span;
+    Object.assign(span.style, {
+      position: 'absolute',
+      visibility: 'hidden',
+      whiteSpace: 'pre',
+      top: '0',
+      left: '-9999px',
+    });
+    document.body.appendChild(span);
+    return () => span.remove();
+  }, []);
+
+  useLayoutEffect(recalculateWidth, [value]);
 
   return (
-    <textarea
+    <input
       ref={inputRef}
       value={value}
       onChange={(e) => onValueChange(e.target.value)}
       className="pe-1 border wrap-break-word"
-      style={{ width: w ? `${w}px` : undefined }}
+      style={{ width: `${width}px` }}
     />
   );
 }
