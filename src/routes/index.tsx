@@ -15,7 +15,7 @@ function App() {
           attributes: {
             priority: {
               // example value: 'p1',
-              regex: 'p[1-3]',
+              regex: /^p[1-3]$/,
             },
             currency: {
               // example value: '123.21 USD',
