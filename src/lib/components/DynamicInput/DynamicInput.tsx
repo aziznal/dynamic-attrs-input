@@ -6,10 +6,20 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { RefObject } from 'react';
+import type { EventHandler, MouseEventHandler, RefObject } from 'react';
 import { cn } from '@/lib/utils';
 
+// Features
 // - [x] Clicking on input focuses last text segment
+// - [ ] Cursor should automatically focus on newly inserted text segments
+// - [ ] Backspace on empty text segment should remove it (unless it's the last remaining text segment)
+// - [ ] Attribute segments should be inputs
+// - [ ] Cursor should be navigable between segments
+// - [x] Clicking attribute segment removes it
+// - [ ] Backspacing at attribute segment removes it
+// - [ ] Custom callback upon a match (i.e. an api call to create a tag)
+//
+// Edge cases
 // - [ ] Given multiple entries for the same attribute, only the last one counts as the value and gets highlighted etc.
 
 type AttributeDef = { regex: RegExp };
@@ -97,6 +107,13 @@ export function DynamicInput<TAttributes extends Record<string, AttributeDef>>(
             key={entry.id}
             ref={ref}
             value={entry.value}
+            onClick={(e) => {
+              e.stopPropagation();
+
+              removeSegment({
+                id: entry.id,
+              });
+            }}
           />
         ),
       } as const;
@@ -137,46 +154,55 @@ export function DynamicInput<TAttributes extends Record<string, AttributeDef>>(
 
     // test all attr regexes, stop at first matching and create new attr segment
     for (const [attrName, attrDef] of Object.entries(props.value.attributes)) {
-      const matches = attrDef.regex.test(currentValue);
+      const matched = currentValue.match(attrDef.regex)?.[0];
+      const replaced = currentValue.replace(attrDef.regex, '').trim();
 
-      if (matches) {
+      if (matched) {
+        const isPartialMatch = replaced.length === 0;
+
+        // if partial match, extract it out of current text segment
+        if (isPartialMatch) {
+          // create new attr segment after current text segment
+          setValue((prev) => {
+            const updated = prev.map((e) =>
+              e.id === focusedTextSegment.id
+                ? ({
+                    type: 'attribute',
+                    id: genSegmentId(),
+                    name: attrName,
+                    value: matched,
+                    ref: createRef<HTMLDivElement>(),
+                  } satisfies AttrSegment)
+                : e,
+            );
+
+            const newTextSegment = {
+              type: 'text',
+              id: genSegmentId(),
+              value: '',
+              ref: createRef<HTMLInputElement>(),
+            } satisfies TextSegment;
+
+            return [...updated, newTextSegment];
+          });
+
+          return;
+        }
+
+        // if total match (i.e. text segment will be entirely converted to attr)
         createNewAttributeSegment({
           attributeName: attrName,
-          attributeValue: currentValue,
+          attributeValue: matched.toLowerCase(),
           replaceSegmentId: focusedTextSegment.id,
         });
+
         break;
       }
     }
   }, [anyInputValue]);
 
-  const createNewAttributeSegment = (args: {
-    attributeName: AttrSegment['name'];
-    attributeValue: AttrSegment['value'];
-    replaceSegmentId: Segment['id'];
-  }) => {
-    setValue((prev) => {
-      const updated = prev.map((e) =>
-        e.id === args.replaceSegmentId
-          ? ({
-              type: 'attribute',
-              id: genSegmentId(),
-              name: args.attributeName,
-              value: args.attributeValue,
-              ref: createRef<HTMLDivElement>(),
-            } satisfies AttrSegment)
-          : e,
-      );
-
-      const newTextSegment = {
-        type: 'text',
-        id: genSegmentId(),
-        value: '',
-        ref: createRef<HTMLInputElement>(),
-      } satisfies TextSegment;
-
-      return [...updated, newTextSegment];
-    });
+  const removeSegment = (args: { id: Segment['id'] }) => {
+    setValue((prev) => prev.filter((seg) => seg.id !== args.id));
   };
 
   const focusLastTextSegment = () => {
@@ -287,13 +313,15 @@ function TextSegmentRender({
 type AttributeSegmentProps = {
   ref: RefObject<HTMLDivElement | null>;
   value: string;
+  onClick: MouseEventHandler;
 };
 
 function AttributeSegmentRender(props: AttributeSegmentProps) {
   return (
     <div
       ref={props.ref}
-      className="px-1 py-0.5 rounded-md bg-rose-500 text-white font-medium"
+      className="px-1 py-0.5 rounded-md bg-rose-500 text-white font-medium cursor-pointer"
+      onClick={props.onClick}
     >
       {props.value}
     </div>

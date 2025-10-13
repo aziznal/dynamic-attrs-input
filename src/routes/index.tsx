@@ -15,11 +15,11 @@ function App() {
           attributes: {
             priority: {
               // example value: 'p1',
-              regex: /^p[1-3]$/,
+              regex: /p[1-3]/i,
             },
             currency: {
-              // example value: '123.21 USD',
-              regex: /\d*\.?\d*\s?(USD|EUR|TRY)/,
+              // example value: 'USD',
+              regex: /(USD|EUR|TRY)/i,
             },
           },
         }}
