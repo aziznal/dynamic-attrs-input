@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { EventHandler, MouseEventHandler, RefObject } from 'react';
+import type { MouseEventHandler, RefObject } from 'react';
 import { cn } from '@/lib/utils';
 
 // Features
